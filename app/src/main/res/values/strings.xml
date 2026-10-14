@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">WCMP</string>
+    <string name="accessibility_service_description">WCMP uses this service to securely detect when a protected application is launched, enabling App Lock capabilities. It does not collect text or passwords.</string>
+</resources>
