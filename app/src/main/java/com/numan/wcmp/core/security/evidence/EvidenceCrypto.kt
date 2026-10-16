@@ -135,4 +135,32 @@ object EvidenceCrypto {
             }
         }
     }
+
+    fun openDecryptedInputStream(keyManager: EvidenceKeyManager, encryptedFile: File): java.io.InputStream {
+        val rawStream = java.io.BufferedInputStream(FileInputStream(encryptedFile), 8 * 1024)
+        val version = rawStream.read()
+        require(version == EvidenceEncryptionVersion.V1) {
+            "Unsupported encryption header version: $version"
+        }
+        val ivLength = rawStream.read()
+        require(ivLength == IV_LENGTH_BYTE) {
+            "Invalid GCM IV length: $ivLength"
+        }
+        val iv = ByteArray(ivLength)
+        var bytesRead = 0
+        while (bytesRead < ivLength) {
+            val read = rawStream.read(iv, bytesRead, ivLength - bytesRead)
+            if (read == -1) throw java.security.GeneralSecurityException("Truncated IV header in encrypted evidence file")
+            bytesRead += read
+        }
+        val secretKey = keyManager.getExistingKey() ?: keyManager.getOrCreateKey()
+        val cipher = Cipher.getInstance(ALGORITHM).apply {
+            init(
+                Cipher.DECRYPT_MODE,
+                secretKey,
+                GCMParameterSpec(TAG_LENGTH_BIT, iv)
+            )
+        }
+        return javax.crypto.CipherInputStream(rawStream, cipher)
+    }
 }

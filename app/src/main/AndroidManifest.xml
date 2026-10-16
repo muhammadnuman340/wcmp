@@ -9,6 +9,10 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Android 11+ Package Visibility -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
 
@@ -42,20 +46,10 @@
             android:theme="@style/Theme.WCMP"
             android:windowSoftInputMode="stateAlwaysHidden" />
             
-        <activity
-            android:name=".feature.evidence.capture.CameraCaptureActivity"
+        <service
+            android:name=".core.evidence.EvidenceCaptureService"
             android:exported="false"
-            android:theme="@style/Theme.WCMP" />
-            
-        <activity
-            android:name=".feature.evidence.capture.audio.AudioCaptureActivity"
-            android:exported="false"
-            android:theme="@style/Theme.WCMP" />
-            
-        <activity
-            android:name=".feature.evidence.capture.location.LocationCaptureActivity"
-            android:exported="false"
-            android:theme="@style/Theme.WCMP" />
+            android:foregroundServiceType="camera|microphone|location" />
 
         <service
             android:name=".core.monitoring.WcmpAccessibilityService"

@@ -14,6 +14,7 @@ import com.numan.wcmp.feature.vault.model.VaultCategory
 import com.numan.wcmp.feature.vault.model.VaultEvidence
 import com.numan.wcmp.feature.vault.model.VaultEvidenceType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -28,6 +29,16 @@ import java.util.UUID
  * and fully verifiable.
  */
 object SampleEvidenceSeeder {
+
+    suspend fun seedIfEmpty(context: Context): Int = withContext(Dispatchers.IO) {
+        val repository = WcmpRepositoryProvider.getSecurityRepository(context)
+        val existing = repository.observeVaultEvidence().first()
+        if (existing.isEmpty()) {
+            seed(context)
+        } else {
+            0
+        }
+    }
 
     suspend fun seed(context: Context): Int = withContext(Dispatchers.IO) {
         val repository = WcmpRepositoryProvider.getSecurityRepository(context)

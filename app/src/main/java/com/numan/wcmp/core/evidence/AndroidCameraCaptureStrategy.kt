@@ -34,16 +34,15 @@ class AndroidCameraCaptureStrategy(
         
         CameraCaptureSession.prepareSession(request.trigger.name, request.relatedEventId)
         
-        val intent = android.content.Intent().apply {
-            setClassName(context, "com.numan.wcmp.feature.evidence.capture.CameraCaptureActivity")
-            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        
         try {
-            context.startActivity(intent)
+            EvidenceCaptureService.startCapture(
+                context = context,
+                eventIdStr = request.relatedEventId,
+                trigger = request.trigger.name
+            )
         } catch (e: Exception) {
             CameraCaptureSession.complete(null)
-            return EvidenceCaptureResult.Failure("Failed to launch CameraCaptureActivity: ${e.message}")
+            return EvidenceCaptureResult.Failure("Failed to start EvidenceCaptureService: ${e.message}")
         }
         
         val record = CameraCaptureSession.awaitResult()

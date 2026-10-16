@@ -73,3 +73,18 @@ fun VaultEvidence.toEntity(): VaultEvidenceEntity {
         sessionId = sessionId
     )
 }
+
+fun com.numan.wcmp.data.local.database.entity.SecurityEventEntity.toDomainModel(): com.numan.wcmp.domain.events.SecurityEvent {
+    val triggerType = try {
+        com.numan.wcmp.domain.events.EventTriggerType.valueOf(trigger)
+    } catch (e: Exception) {
+        com.numan.wcmp.domain.events.EventTriggerType.APP_UNAUTHORIZED_LAUNCH
+    }
+    return com.numan.wcmp.domain.events.SecurityEvent(
+        id = id,
+        timestamp = timestamp,
+        triggerType = triggerType,
+        summary = "$title: $description",
+        isConfirmedIntruder = severity.equals("CRITICAL", ignoreCase = true) || severity.equals("HIGH", ignoreCase = true)
+    )
+}

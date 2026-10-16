@@ -1,9 +1,17 @@
 package com.numan.wcmp.data.local.database.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "vault_evidence")
+@Entity(
+    tableName = "vault_evidence",
+    indices = [
+        Index(value = ["timestamp"]),
+        Index(value = ["sessionId"]),
+        Index(value = ["relatedEventId"])
+    ]
+)
 data class VaultEvidenceEntity(
     @PrimaryKey
     val id: String,

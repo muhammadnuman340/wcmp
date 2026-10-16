@@ -15,8 +15,8 @@ val WcmpProtection = Color(0xFF42E4A0)
 val WcmpWarning = Color(0xFFFFB84D)
 val WcmpCritical = Color(0xFFFF5C6C)
 val WcmpPrimaryText = Color(0xFFF5F9FF)
-val WcmpSecondaryText = Color(0xFF9AABBA)
-val WcmpMuted = Color(0xFF596B80)
+val WcmpSecondaryText = Color(0xFFB0C0D0) // Raised from 0xFF9AABBA
+val WcmpMuted = Color(0xFF8296B0) // Raised from 0xFF596B80 to pass WCAG AA (>4.5:1)
 
 val WcmpDarkColorScheme = darkColorScheme(
     primary = WcmpPrimary,

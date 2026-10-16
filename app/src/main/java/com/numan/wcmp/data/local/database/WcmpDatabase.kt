@@ -15,8 +15,8 @@ import com.numan.wcmp.data.local.database.entity.VaultEvidenceEntity
         VaultEvidenceEntity::class,
         ProtectedAppEntity::class
     ],
-    version = 5,
-    exportSchema = false
+    version = 6,
+    exportSchema = true
 )
 abstract class WcmpDatabase : RoomDatabase() {
     abstract fun securityEventDao(): SecurityEventDao

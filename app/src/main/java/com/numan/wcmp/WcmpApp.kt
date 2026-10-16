@@ -37,7 +37,7 @@ import com.numan.wcmp.ui.theme.WCMPTheme
  */
 @Composable
 fun WcmpApp(
-    darkTheme: Boolean = true,
+    darkTheme: Boolean = androidx.compose.foundation.isSystemInDarkTheme(),
     navigator: WcmpNavigator = rememberWcmpNavigator()
 ) {
     WCMPTheme(darkTheme = darkTheme) {

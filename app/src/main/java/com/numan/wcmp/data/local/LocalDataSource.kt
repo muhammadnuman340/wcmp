@@ -1,7 +1,7 @@
 package com.numan.wcmp.data.local
 
 import com.numan.wcmp.data.model.ProtectionRuleEntity
-import com.numan.wcmp.data.model.SecurityEventEntity
+import com.numan.wcmp.data.local.database.entity.SecurityEventEntity
 import kotlinx.coroutines.flow.Flow
 
 /**

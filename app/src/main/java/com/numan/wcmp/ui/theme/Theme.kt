@@ -18,7 +18,7 @@ import androidx.compose.runtime.CompositionLocalProvider
  */
 @Composable
 fun WCMPTheme(
-    darkTheme: Boolean = true, // Dark mode is default
+    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) WcmpDarkColorScheme else WcmpLightColorScheme

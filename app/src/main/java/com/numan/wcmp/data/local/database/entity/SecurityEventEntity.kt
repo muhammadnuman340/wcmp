@@ -1,9 +1,17 @@
 package com.numan.wcmp.data.local.database.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "security_events")
+@Entity(
+    tableName = "security_events",
+    indices = [
+        Index(value = ["timestamp"]),
+        Index(value = ["sessionId"]),
+        Index(value = ["packageName"])
+    ]
+)
 data class SecurityEventEntity(
     @PrimaryKey
     val id: String,

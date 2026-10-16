@@ -1,13 +1,24 @@
 package com.numan.wcmp
 
 import android.app.Application
+import android.util.Log
 import com.numan.wcmp.core.background.WcmpWorkManager
+import com.numan.wcmp.core.evidence.SampleEvidenceSeeder
+import com.numan.wcmp.data.WcmpRepositoryProvider
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.first
 
 class WcmpApplication : Application() {
+    private val applicationScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default +
+        CoroutineExceptionHandler { _, throwable ->
+            Log.e("WcmpApplication", "Unhandled background initialization error", throwable)
+        }
+    )
+
     override fun onCreate() {
         super.onCreate()
         
@@ -16,22 +27,17 @@ class WcmpApplication : Application() {
         workManager.scheduleInstalledAppsSync()
         workManager.scheduleRepositoryMaintenance()
         
-        // Initialize SecurityEngine. Note: it only starts monitoring if requested 
-        // (which we do here for testing the engine foundation) and if the user 
-        // has granted the necessary accessibility permission.
-        val securityEngine = com.numan.wcmp.data.WcmpRepositoryProvider.getSecurityEngine(this)
-        securityEngine.start()
+        // Initialize SecurityEngine. Starts monitoring if accessibility service is enabled.
+        WcmpRepositoryProvider.getSecurityEngine(this).start()
 
-        // Auto-seed initial sample evidence if vault is empty so the Evidence tab is immediately verifiable
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            try {
-                val repository = com.numan.wcmp.data.WcmpRepositoryProvider.getSecurityRepository(this@WcmpApplication)
-                val existing = repository.observeVaultEvidence().first()
-                if (existing.isEmpty()) {
-                    com.numan.wcmp.core.evidence.SampleEvidenceSeeder.seed(this@WcmpApplication)
+        // Auto-seed initial sample evidence if vault is empty (DEBUG mode only)
+        if (BuildConfig.DEBUG) {
+            applicationScope.launch(Dispatchers.IO) {
+                try {
+                    SampleEvidenceSeeder.seedIfEmpty(this@WcmpApplication)
+                } catch (e: Exception) {
+                    Log.e("WcmpApplication", "Failed to seed sample evidence", e)
                 }
-            } catch (e: Exception) {
-                // Non-fatal fallback
             }
         }
     }

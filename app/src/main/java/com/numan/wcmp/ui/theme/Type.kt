@@ -32,22 +32,24 @@ val WcmpTypography = Typography(
     bodyLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
-        fontSize = 15.sp,
-        lineHeight = 22.sp,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
         letterSpacing = 0.15.sp
     ),
     labelLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
-        fontSize = 13.sp,
-        lineHeight = 18.sp,
-        letterSpacing = 0.1.sp
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.1.sp,
+        fontFeatureSettings = "tnum"
     ),
     bodySmall = TextStyle( // Caption
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.4.sp
+        fontSize = 12.sp,
+        lineHeight = 18.sp,
+        letterSpacing = 0.25.sp,
+        fontFeatureSettings = "tnum"
     )
 )
