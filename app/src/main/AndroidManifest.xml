@@ -42,7 +42,8 @@
             android:name=".feature.applock.AppLockActivity"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:noHistory="true"
+            android:taskAffinity="com.numan.wcmp.applock"
+            android:launchMode="singleInstance"
             android:theme="@style/Theme.WCMP"
             android:windowSoftInputMode="stateAlwaysHidden" />
             

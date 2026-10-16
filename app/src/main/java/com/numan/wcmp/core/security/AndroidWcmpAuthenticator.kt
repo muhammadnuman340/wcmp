@@ -7,64 +7,95 @@ import androidx.fragment.app.FragmentActivity
 import com.numan.wcmp.domain.protection.AuthenticationResult
 import com.numan.wcmp.domain.protection.WcmpAuthenticator
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
 
 class AndroidWcmpAuthenticator(
-    private val activity: FragmentActivity
+    private val activity: FragmentActivity,
+    private val maxFailedAttemptsBeforeCapture: Int = 1,
+    private val onFailedAttempt: ((attemptNumber: Int) -> Unit)? = null
 ) : WcmpAuthenticator {
+    override suspend fun authenticate(): AuthenticationResult =
+        suspendCancellableCoroutine { continuation ->
+            val biometricManager = BiometricManager.from(activity)
+            val authenticators =
+                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
 
-    override suspend fun authenticate(): AuthenticationResult = suspendCancellableCoroutine { continuation ->
-        
-        val biometricManager = BiometricManager.from(activity)
-        // Check if biometric (or device credential) is available
-        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
-        
-        val canAuthenticate = biometricManager.canAuthenticate(authenticators)
-        if (canAuthenticate != BiometricManager.BIOMETRIC_SUCCESS) {
-            continuation.resume(AuthenticationResult.UNAVAILABLE)
-            return@suspendCancellableCoroutine
+            val canAuthenticate = biometricManager.canAuthenticate(authenticators)
+            if (canAuthenticate != BiometricManager.BIOMETRIC_SUCCESS) {
+                continuation.resume(AuthenticationResult.UNAVAILABLE)
+                return@suspendCancellableCoroutine
+            }
+
+            val failedAttempts = AtomicInteger(0)
+            val executor = ContextCompat.getMainExecutor(activity)
+            lateinit var biometricPrompt: BiometricPrompt
+
+            biometricPrompt = BiometricPrompt(
+                activity,
+                executor,
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        super.onAuthenticationError(errorCode, errString)
+                        val result = when (errorCode) {
+                            BiometricPrompt.ERROR_LOCKOUT,
+                            BiometricPrompt.ERROR_LOCKOUT_PERMANENT -> {
+                                AuthenticationResult.FAILED
+                            }
+                            BiometricPrompt.ERROR_USER_CANCELED,
+                            BiometricPrompt.ERROR_NEGATIVE_BUTTON,
+                            BiometricPrompt.ERROR_CANCELED -> {
+                                if (failedAttempts.get() > 0) {
+                                    AuthenticationResult.FAILED
+                                } else {
+                                    AuthenticationResult.CANCELLED
+                                }
+                            }
+                            else -> {
+                                if (failedAttempts.get() > 0) {
+                                    AuthenticationResult.FAILED
+                                } else {
+                                    AuthenticationResult.ERROR
+                                }
+                            }
+                        }
+                        if (continuation.isActive) {
+                            continuation.resume(result)
+                        }
+                    }
+
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        super.onAuthenticationSucceeded(result)
+                        if (continuation.isActive) {
+                            continuation.resume(AuthenticationResult.SUCCESS)
+                        }
+                    }
+
+                    override fun onAuthenticationFailed() {
+                        super.onAuthenticationFailed()
+                        val count = failedAttempts.incrementAndGet()
+                        onFailedAttempt?.invoke(count)
+                        if (count >= maxFailedAttemptsBeforeCapture) {
+                            biometricPrompt.cancelAuthentication()
+                            if (continuation.isActive) {
+                                continuation.resume(AuthenticationResult.FAILED)
+                            }
+                        }
+                    }
+                }
+            )
+
+            val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                .setTitle("WCMP Protection")
+                .setSubtitle("Authenticate to continue to this protected app.")
+                .setAllowedAuthenticators(authenticators)
+                .build()
+
+            biometricPrompt.authenticate(promptInfo)
+
+            continuation.invokeOnCancellation {
+                biometricPrompt.cancelAuthentication()
+            }
         }
-
-        val executor = ContextCompat.getMainExecutor(activity)
-        val biometricPrompt = BiometricPrompt(activity, executor,
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    super.onAuthenticationError(errorCode, errString)
-                    val result = if (errorCode == BiometricPrompt.ERROR_USER_CANCELED || errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
-                        AuthenticationResult.CANCELLED
-                    } else {
-                        AuthenticationResult.ERROR
-                    }
-                    if (continuation.isActive) {
-                        continuation.resume(result)
-                    }
-                }
-
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    super.onAuthenticationSucceeded(result)
-                    if (continuation.isActive) {
-                        continuation.resume(AuthenticationResult.SUCCESS)
-                    }
-                }
-
-                override fun onAuthenticationFailed() {
-                    super.onAuthenticationFailed()
-                    // Prompt stays open on failure for retry, we don't immediately resume FAILED
-                    // unless we want to fail the whole process.
-                    // BiometricPrompt handles retries internally. We only resume on terminal states.
-                }
-            })
-
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("WCMP Protection")
-            .setSubtitle("Authenticate to continue to this protected app.")
-            .setAllowedAuthenticators(authenticators)
-            .build()
-
-        biometricPrompt.authenticate(promptInfo)
-        
-        continuation.invokeOnCancellation {
-            biometricPrompt.cancelAuthentication()
-        }
-    }
 }

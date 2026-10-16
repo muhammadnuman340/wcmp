@@ -9,8 +9,9 @@ class EvidencePolicy(
     private val locationEnabledFlow: Flow<Boolean>
 ) {
     suspend fun isCaptureAllowed(request: EvidenceCaptureRequest): Boolean {
-        // Only allow manual test and authentication failures to trigger evidence
+        // Allow manual test, authentication failures, and authentication cancellation to trigger evidence
         if (request.trigger != EvidenceTrigger.AUTHENTICATION_FAILED && 
+            request.trigger != EvidenceTrigger.AUTHENTICATION_CANCELLED && 
             request.trigger != EvidenceTrigger.MANUAL_TEST) {
             return false
         }

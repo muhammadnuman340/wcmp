@@ -1,4 +1,4 @@
-﻿package com.numan.wcmp.feature.applock
+package com.numan.wcmp.feature.applock
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -26,11 +26,11 @@ fun AppLockScreen(
     packageName: String,
     applicationName: String?,
     isBiometricAvailable: Boolean,
+    uiStatus: String = if (isBiometricAvailable) "READY" else "NO_BIOMETRICS",
     onAuthenticateClick: () -> Unit,
     onCancelClick: () -> Unit
 ) {
     val haptics = rememberWcmpHaptics()
-    var state by remember { mutableStateOf(if (isBiometricAvailable) "READY" else "NO_BIOMETRICS") }
 
     BackHandler {
         onCancelClick()
@@ -77,7 +77,7 @@ fun AppLockScreen(
             Spacer(modifier = Modifier.height(16.dp))
             
             AnimatedContent(
-                targetState = state,
+                targetState = uiStatus,
                 transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
                 label = "AppLockState"
             ) { targetState ->
@@ -93,6 +93,14 @@ fun AppLockScreen(
                     "FAILED" -> {
                         Text(
                             text = "AUTHENTICATION FAILED",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    "NO_BIOMETRICS" -> {
+                        Text(
+                            text = "BIOMETRICS UNAVAILABLE",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.error,
                             textAlign = TextAlign.Center
@@ -123,7 +131,6 @@ fun AppLockScreen(
                 Button(
                     onClick = {
                         haptics.heavyClick()
-                        state = "READY"
                         onAuthenticateClick()
                     },
                     colors = ButtonDefaults.buttonColors(

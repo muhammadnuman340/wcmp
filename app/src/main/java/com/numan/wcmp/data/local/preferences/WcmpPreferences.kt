@@ -28,7 +28,7 @@ class WcmpPreferences(private val context: Context) {
         context.dataStore.edit { it[PROTECTION_MODE] = mode }
     }
 
-    val autoProtectionEnabled: Flow<Boolean> = context.dataStore.data.map { it[AUTO_PROTECTION] ?: false }
+    val autoProtectionEnabled: Flow<Boolean> = context.dataStore.data.map { it[AUTO_PROTECTION] ?: true }
     suspend fun setAutoProtection(enabled: Boolean) {
         context.dataStore.edit { it[AUTO_PROTECTION] = enabled }
     }
