@@ -31,6 +31,7 @@ class DefaultEvidenceKeyManager : EvidenceKeyManager {
 
     @Synchronized
     override fun getOrCreateKey(): SecretKey {
+        runCatching { keyStore.load(null) }
         if (!keyStore.containsAlias(ALIAS_EVIDENCE_KEY_V1)) {
             val keyGenerator = KeyGenerator.getInstance(
                 KeyProperties.KEY_ALGORITHM_AES,
@@ -50,18 +51,26 @@ class DefaultEvidenceKeyManager : EvidenceKeyManager {
             keyGenerator.generateKey()
         }
 
-        val entry = keyStore.getEntry(ALIAS_EVIDENCE_KEY_V1, null) as? KeyStore.SecretKeyEntry
-            ?: throw EvidenceEncryptionException("Failed to retrieve key from Android KeyStore")
+        val entry = try {
+            keyStore.getEntry(ALIAS_EVIDENCE_KEY_V1, null) as? KeyStore.SecretKeyEntry
+        } catch (e: Exception) {
+            throw EvidenceEncryptionException("Failed to retrieve key from Android KeyStore", e)
+        } ?: throw EvidenceEncryptionException("Failed to retrieve key from Android KeyStore")
             
         return entry.secretKey
     }
 
     @Synchronized
     override fun getExistingKey(): SecretKey? {
-        if (!keyStore.containsAlias(ALIAS_EVIDENCE_KEY_V1)) {
-            return null
+        runCatching { keyStore.load(null) }
+        return try {
+            if (!keyStore.containsAlias(ALIAS_EVIDENCE_KEY_V1)) {
+                return null
+            }
+            val entry = keyStore.getEntry(ALIAS_EVIDENCE_KEY_V1, null) as? KeyStore.SecretKeyEntry
+            entry?.secretKey
+        } catch (e: Exception) {
+            null
         }
-        val entry = keyStore.getEntry(ALIAS_EVIDENCE_KEY_V1, null) as? KeyStore.SecretKeyEntry
-        return entry?.secretKey
     }
 }

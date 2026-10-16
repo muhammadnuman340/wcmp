@@ -7,7 +7,6 @@ import java.io.File
 import java.util.UUID
 
 class ControlledDecryptionService(
-
     private val directoryProvider: EvidenceDirectoryProvider,
     private val keyManager: EvidenceKeyManager
 ) : EvidenceDecryptionService {
@@ -42,14 +41,14 @@ class ControlledDecryptionService(
     }
 
     /**
-     * Cleans up any decrypted cache files securely.
+     * Cleans up any decrypted cache files securely with zero-fill overwrite.
      */
     override fun cleanupCache() {
         val cacheDir = directoryProvider.getControlledViewingDirectory()
         if (cacheDir.exists()) {
-            cacheDir.listFiles()?.forEach { it.delete() }
+            cacheDir.listFiles()?.forEach { file ->
+                EvidenceCrypto.secureDelete(file)
+            }
         }
     }
 }
-
-
