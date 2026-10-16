@@ -32,11 +32,6 @@ import com.numan.wcmp.feature.settings.SettingsScreen
 import com.numan.wcmp.feature.vault.VaultScreen
 import com.numan.wcmp.ui.theme.WCMPTheme
 
-/**
- * WCMP Application Root Composable Shell
- * Connects theme, navigation state, animated screen transitions, and bottom navigation bar.
- * Each screen manages its own contextual WcmpTopBar and header actions.
- */
 @Composable
 fun WcmpApp(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -67,7 +62,8 @@ fun WcmpApp(
                 AnimatedContent(
                     targetState = navigator.currentDestination,
                     transitionSpec = {
-                        fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
+                        fadeIn(animationSpec = tween(220)) togetherWith
+                            fadeOut(animationSpec = tween(180))
                     },
                     label = "DestinationTransition",
                     modifier = Modifier.fillMaxSize()
@@ -82,15 +78,29 @@ fun WcmpApp(
                         WcmpDestination.Events -> EventsScreen()
                         WcmpDestination.Vault -> VaultScreen()
                         WcmpDestination.Protection -> ProtectionScreen(
-                            onNavigateToProtectedApps = { navigator.navigateTo(WcmpDestination.ProtectedApps) },
-                            onNavigateToRules = { navigator.navigateTo(WcmpDestination.Rules) },
-                            onNavigateToVault = { navigator.navigateTo(WcmpDestination.Vault) }
+                            onNavigateToProtectedApps = {
+                                navigator.navigateTo(WcmpDestination.ProtectedApps)
+                            },
+                            onNavigateToRules = {
+                                navigator.navigateTo(WcmpDestination.Rules)
+                            },
+                            onNavigateToVault = {
+                                navigator.navigateTo(WcmpDestination.Vault)
+                            }
                         )
                         WcmpDestination.ProtectedApps -> ProtectedAppsScreen(
-                            onNavigateBack = { navigator.popBackStack() }
+                            onNavigateBack = {
+                                if (!navigator.popBackStack()) {
+                                    navigator.navigateTo(WcmpDestination.Protection)
+                                }
+                            }
                         )
                         WcmpDestination.Rules -> RulesScreen(
-                            onBackClick = { navigator.popBackStack() }
+                            onBackClick = {
+                                if (!navigator.popBackStack()) {
+                                    navigator.navigateTo(WcmpDestination.Protection)
+                                }
+                            }
                         )
                         WcmpDestination.Settings -> SettingsScreen()
                     }
@@ -111,8 +121,10 @@ private fun WcmpBottomNavigation(
     ) {
         WcmpDestination.bottomNavDestinations.forEach { destination ->
             val isSelected = currentDestination == destination ||
-                    (destination == WcmpDestination.Protection &&
-                            (currentDestination == WcmpDestination.ProtectedApps || currentDestination == WcmpDestination.Rules))
+                (destination == WcmpDestination.Protection &&
+                    (currentDestination == WcmpDestination.ProtectedApps ||
+                        currentDestination == WcmpDestination.Rules))
+
             NavigationBarItem(
                 selected = isSelected,
                 onClick = { onDestinationSelected(destination) },

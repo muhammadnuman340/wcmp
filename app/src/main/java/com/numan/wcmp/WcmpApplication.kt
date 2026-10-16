@@ -1,7 +1,6 @@
 package com.numan.wcmp
 
 import android.app.Application
-import android.util.Log
 import com.numan.wcmp.core.background.WcmpWorkManager
 import com.numan.wcmp.core.evidence.SampleEvidenceSeeder
 import com.numan.wcmp.data.WcmpRepositoryProvider
@@ -14,47 +13,27 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class WcmpApplication : Application() {
+
     private val applicationScope = CoroutineScope(
-        SupervisorJob() + Dispatchers.Default +
-        CoroutineExceptionHandler { _, throwable ->
-            if (BuildConfig.DEBUG) {
-                Log.e("WcmpApplication", "Unhandled background initialization error", throwable)
-            }
-        }
+        SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, _ -> }
     )
 
     override fun onCreate() {
         super.onCreate()
-        
-        // Schedule foundational background maintenance
+
         val workManager = WcmpWorkManager(this)
         workManager.scheduleInstalledAppsSync()
         workManager.scheduleRepositoryMaintenance()
-        
-        // Initialize SecurityEngine only if the user has auto-protection enabled.
-        applicationScope.launch(Dispatchers.IO) {
-            try {
-                val prefs = WcmpPreferences(this@WcmpApplication)
-                if (prefs.autoProtectionEnabled.first()) {
-                    WcmpRepositoryProvider.getSecurityEngine(this@WcmpApplication).start()
-                }
-            } catch (e: Exception) {
-                if (BuildConfig.DEBUG) {
-                    Log.e("WcmpApplication", "Failed to initialize SecurityEngine state", e)
-                }
-            }
-        }
 
-        // Auto-seed initial sample evidence if vault is empty (DEBUG mode only)
-        if (BuildConfig.DEBUG) {
-            applicationScope.launch(Dispatchers.IO) {
-                try {
-                    SampleEvidenceSeeder.seedIfEmpty(this@WcmpApplication)
-                } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) {
-                        Log.e("WcmpApplication", "Failed to seed sample evidence", e)
-                    }
-                }
+        applicationScope.launch(Dispatchers.IO) {
+            val prefs = WcmpPreferences(applicationContext)
+            val shouldStartProtection = prefs.autoProtectionEnabled.first()
+            if (shouldStartProtection) {
+                WcmpRepositoryProvider.getSecurityEngine(applicationContext).start()
+            }
+
+            if (BuildConfig.DEBUG) {
+                SampleEvidenceSeeder.seedIfEmpty(applicationContext)
             }
         }
     }
