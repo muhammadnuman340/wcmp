@@ -3,10 +3,6 @@ package com.numan.wcmp.core.navigation
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.numan.wcmp.ui.icons.WcmpIcons
 
-/**
- * WCMP Navigation Destinations
- * Clean architecture destinations decoupled from specific framework routers.
- */
 sealed class WcmpDestination(
     val route: String,
     val title: String,
@@ -55,13 +51,25 @@ sealed class WcmpDestination(
     )
 
     companion object {
-        val bottomNavDestinations: List<WcmpDestination>
-            get() = listOf(
-                Home,
-                Events,
-                Vault,
-                Protection,
-                Settings
-            )
+        val bottomNavDestinations: List<WcmpDestination> = listOf(
+            Home,
+            Events,
+            Vault,
+            Protection,
+            Settings
+        )
+
+        private val allDestinations: List<WcmpDestination> = listOf(
+            Home,
+            Events,
+            Vault,
+            Protection,
+            ProtectedApps,
+            Rules,
+            Settings
+        )
+
+        fun fromRoute(route: String): WcmpDestination? =
+            allDestinations.firstOrNull { it.route == route }
     }
 }

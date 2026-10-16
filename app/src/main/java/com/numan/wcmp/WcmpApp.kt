@@ -1,10 +1,12 @@
 package com.numan.wcmp
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -37,9 +39,13 @@ import com.numan.wcmp.ui.theme.WCMPTheme
  */
 @Composable
 fun WcmpApp(
-    darkTheme: Boolean = androidx.compose.foundation.isSystemInDarkTheme(),
+    darkTheme: Boolean = isSystemInDarkTheme(),
     navigator: WcmpNavigator = rememberWcmpNavigator()
 ) {
+    BackHandler(enabled = navigator.canNavigateBack()) {
+        navigator.popBackStack()
+    }
+
     WCMPTheme(darkTheme = darkTheme) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -77,13 +83,14 @@ fun WcmpApp(
                         WcmpDestination.Vault -> VaultScreen()
                         WcmpDestination.Protection -> ProtectionScreen(
                             onNavigateToProtectedApps = { navigator.navigateTo(WcmpDestination.ProtectedApps) },
-                            onNavigateToRules = { navigator.navigateTo(WcmpDestination.Rules) }
+                            onNavigateToRules = { navigator.navigateTo(WcmpDestination.Rules) },
+                            onNavigateToVault = { navigator.navigateTo(WcmpDestination.Vault) }
                         )
                         WcmpDestination.ProtectedApps -> ProtectedAppsScreen(
-                            onNavigateBack = { navigator.navigateTo(WcmpDestination.Protection) }
+                            onNavigateBack = { navigator.popBackStack() }
                         )
                         WcmpDestination.Rules -> RulesScreen(
-                            onBackClick = { navigator.navigateTo(WcmpDestination.Protection) }
+                            onBackClick = { navigator.popBackStack() }
                         )
                         WcmpDestination.Settings -> SettingsScreen()
                     }

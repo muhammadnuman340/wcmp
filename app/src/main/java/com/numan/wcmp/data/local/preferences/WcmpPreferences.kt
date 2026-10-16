@@ -72,4 +72,9 @@ class WcmpPreferences(private val context: Context) {
     suspend fun setLocationEvidence(enabled: Boolean) {
         context.dataStore.edit { it[LOCATION_EVIDENCE] = enabled }
     }
+
+    val theme: Flow<String> = context.dataStore.data.map { it[THEME] ?: "System Default" }
+    suspend fun setTheme(theme: String) {
+        context.dataStore.edit { it[THEME] = theme }
+    }
 }

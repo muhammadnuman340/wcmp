@@ -1,39 +1,48 @@
 package com.numan.wcmp.data
 
 import android.content.Context
-import com.numan.wcmp.data.local.database.WcmpDatabaseProvider
-import com.numan.wcmp.data.local.preferences.WcmpPreferences
-import com.numan.wcmp.data.repository.SecurityRepository
-
+import com.numan.wcmp.core.evidence.AndroidAudioCaptureStrategy
+import com.numan.wcmp.core.evidence.AndroidCameraCaptureStrategy
+import com.numan.wcmp.core.evidence.AndroidLocationCaptureStrategy
+import com.numan.wcmp.core.monitoring.AccessibilityForegroundMonitor
 import com.numan.wcmp.core.permissions.CapabilityManager
 import com.numan.wcmp.core.permissions.CapabilityRepository
-import com.numan.wcmp.core.permissions.RuntimePermissionManager
 import com.numan.wcmp.core.permissions.DefaultRuntimePermissionManager
-import com.numan.wcmp.core.permissions.SpecialAccessManager
 import com.numan.wcmp.core.permissions.DefaultSpecialAccessManager
-import com.numan.wcmp.data.local.apps.InstalledAppDataSource
+import com.numan.wcmp.core.security.evidence.DefaultEvidenceKeyManager
+import com.numan.wcmp.core.security.evidence.EncryptedEvidenceStorage
 import com.numan.wcmp.data.local.apps.DefaultInstalledAppDataSource
-import com.numan.wcmp.data.repository.ProtectedAppsRepository
+import com.numan.wcmp.data.local.database.WcmpDatabaseProvider
+import com.numan.wcmp.data.local.preferences.WcmpPreferences
 import com.numan.wcmp.data.repository.DefaultProtectedAppsRepository
+import com.numan.wcmp.data.repository.DefaultSecurityRepository
+import com.numan.wcmp.data.repository.ProtectedAppsRepository
+import com.numan.wcmp.data.repository.SecurityRepository
+import com.numan.wcmp.domain.evidence.DefaultEvidenceCaptureCoordinator
+import com.numan.wcmp.domain.evidence.EvidenceCaptureCoordinator
+import com.numan.wcmp.domain.evidence.EvidencePolicy
+import com.numan.wcmp.domain.evidence.EvidenceType
+import com.numan.wcmp.domain.evidence.health.AndroidEvidenceDirectoryProvider
+import com.numan.wcmp.domain.evidence.health.DefaultEvidenceIntegrityService
+import com.numan.wcmp.domain.evidence.health.EvidenceHealthEvaluator
+import com.numan.wcmp.domain.evidence.health.EvidenceIntegrityService
 import com.numan.wcmp.domain.protection.AppLockController
 import com.numan.wcmp.domain.protection.DefaultAppLockPolicy
 import com.numan.wcmp.domain.protection.DefaultAppLockPresenter
 import com.numan.wcmp.domain.security.SecurityEngine
 import com.numan.wcmp.domain.security.SecurityEventProcessor
-import com.numan.wcmp.core.monitoring.AccessibilityForegroundMonitor
+import com.numan.wcmp.domain.security.SecuritySessionManager
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import com.numan.wcmp.domain.evidence.EvidencePolicy
-import com.numan.wcmp.domain.evidence.EvidenceCaptureCoordinator
-import com.numan.wcmp.domain.evidence.DefaultEvidenceCaptureCoordinator
-import com.numan.wcmp.domain.evidence.EvidenceType
-import com.numan.wcmp.core.evidence.AndroidCameraCaptureStrategy
-import com.numan.wcmp.core.evidence.AndroidAudioCaptureStrategy
-import com.numan.wcmp.core.evidence.AndroidLocationCaptureStrategy
-import com.numan.wcmp.data.repository.DefaultSecurityRepository
 
 object WcmpRepositoryProvider {
+
+    private val sharedSupervisorScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, _ -> }
+    )
+
     @Volatile
     private var securityRepository: SecurityRepository? = null
 
@@ -53,124 +62,148 @@ object WcmpRepositoryProvider {
     private var evidenceCaptureCoordinator: EvidenceCaptureCoordinator? = null
 
     @Volatile
-    private var evidenceIntegrityService: com.numan.wcmp.domain.evidence.health.EvidenceIntegrityService? = null
+    private var evidenceIntegrityService: EvidenceIntegrityService? = null
 
     @Volatile
-    private var securitySessionManager: com.numan.wcmp.domain.security.SecuritySessionManager? = null
+    private var securitySessionManager: SecuritySessionManager? = null
 
-    fun getSecuritySessionManager(): com.numan.wcmp.domain.security.SecuritySessionManager {
+    fun getSecuritySessionManager(): SecuritySessionManager {
         return securitySessionManager ?: synchronized(this) {
-            val manager = com.numan.wcmp.domain.security.SecuritySessionManager()
-            securitySessionManager = manager
-            manager
+            securitySessionManager ?: SecuritySessionManager().also {
+                securitySessionManager = it
+            }
         }
     }
 
-    fun getEvidenceIntegrityService(context: Context): com.numan.wcmp.domain.evidence.health.EvidenceIntegrityService {
+    fun getEvidenceIntegrityService(context: Context): EvidenceIntegrityService {
+        val appContext = context.applicationContext
         return evidenceIntegrityService ?: synchronized(this) {
-            val keyManager = com.numan.wcmp.core.security.evidence.DefaultEvidenceKeyManager()
-            val directoryProvider = com.numan.wcmp.domain.evidence.health.AndroidEvidenceDirectoryProvider(context.applicationContext)
-            val healthEvaluator = com.numan.wcmp.domain.evidence.health.EvidenceHealthEvaluator(context.applicationContext.filesDir, keyManager)
-            val service = com.numan.wcmp.domain.evidence.health.DefaultEvidenceIntegrityService(directoryProvider, keyManager, healthEvaluator)
-            evidenceIntegrityService = service
-            service
+            evidenceIntegrityService ?: run {
+                val keyManager = DefaultEvidenceKeyManager()
+                val directoryProvider = AndroidEvidenceDirectoryProvider(appContext)
+                val healthEvaluator = EvidenceHealthEvaluator(appContext.filesDir, keyManager)
+                DefaultEvidenceIntegrityService(directoryProvider, keyManager, healthEvaluator).also {
+                    evidenceIntegrityService = it
+                }
+            }
         }
     }
 
     fun getEvidenceCaptureCoordinator(context: Context): EvidenceCaptureCoordinator {
+        val appContext = context.applicationContext
         return evidenceCaptureCoordinator ?: synchronized(this) {
-            val prefs = WcmpPreferences(context)
-            val policy = EvidencePolicy(
-                cameraEnabledFlow = prefs.cameraEvidenceEnabled,
-                audioEnabledFlow = prefs.audioEvidenceEnabled,
-                locationEnabledFlow = prefs.locationEvidenceEnabled
-            )
-            val storage = com.numan.wcmp.core.security.evidence.EncryptedEvidenceStorage(
-                context.applicationContext.filesDir,
-                getSecurityRepository(context)
-            )
-            val strategies = mapOf(
-                EvidenceType.FRONT_CAMERA_PHOTO to AndroidCameraCaptureStrategy(context.applicationContext),
-                EvidenceType.AUDIO_CLIP to AndroidAudioCaptureStrategy(context.applicationContext),
-                EvidenceType.LOCATION_STAMP to AndroidLocationCaptureStrategy(context.applicationContext)
-            )
-            val coordinator = DefaultEvidenceCaptureCoordinator(policy, strategies, storage)
-            evidenceCaptureCoordinator = coordinator
-            coordinator
+            evidenceCaptureCoordinator ?: run {
+                val prefs = WcmpPreferences(appContext)
+                val policy = EvidencePolicy(
+                    cameraEnabledFlow = prefs.cameraEvidenceEnabled,
+                    audioEnabledFlow = prefs.audioEvidenceEnabled,
+                    locationEnabledFlow = prefs.locationEvidenceEnabled
+                )
+                val storage = EncryptedEvidenceStorage(
+                    appContext.filesDir,
+                    getSecurityRepository(appContext)
+                )
+                val strategies = mapOf(
+                    EvidenceType.FRONT_CAMERA_PHOTO to AndroidCameraCaptureStrategy(appContext),
+                    EvidenceType.AUDIO_CLIP to AndroidAudioCaptureStrategy(appContext),
+                    EvidenceType.LOCATION_STAMP to AndroidLocationCaptureStrategy(appContext)
+                )
+                DefaultEvidenceCaptureCoordinator(policy, strategies, storage).also {
+                    evidenceCaptureCoordinator = it
+                }
+            }
         }
     }
 
     fun getAppLockController(context: Context): AppLockController {
+        val appContext = context.applicationContext
         return appLockController ?: synchronized(this) {
-            val controller = AppLockController(
+            appLockController ?: AppLockController(
                 policy = DefaultAppLockPolicy(),
-                securityRepository = getSecurityRepository(context),
-                presenter = DefaultAppLockPresenter(context.applicationContext),
-                evidenceCoordinator = getEvidenceCaptureCoordinator(context), // We need to update AppLockController to take EvidenceCoordinator
-                coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            )
-            appLockController = controller
-            controller
+                securityRepository = getSecurityRepository(appContext),
+                presenter = DefaultAppLockPresenter(appContext),
+                evidenceCoordinator = getEvidenceCaptureCoordinator(appContext),
+                coroutineScope = sharedSupervisorScope,
+                sessionManager = getSecuritySessionManager()
+            ).also {
+                appLockController = it
+            }
         }
     }
 
     fun getSecurityEngine(context: Context): SecurityEngine {
+        val appContext = context.applicationContext
         return securityEngine ?: synchronized(this) {
-            val engine = SecurityEngine(
+            securityEngine ?: SecurityEngine(
                 foregroundMonitor = AccessibilityForegroundMonitor,
-                protectedAppsRepository = getProtectedAppsRepository(context),
-                eventProcessor = SecurityEventProcessor(getSecurityRepository(context), getSecuritySessionManager()),
-                appLockController = getAppLockController(context),
-                coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+                protectedAppsRepository = getProtectedAppsRepository(appContext),
+                eventProcessor = SecurityEventProcessor(
+                    getSecurityRepository(appContext),
+                    getSecuritySessionManager()
+                ),
+                appLockController = getAppLockController(appContext),
+                coroutineScope = sharedSupervisorScope,
                 sessionManager = getSecuritySessionManager()
-            )
-            securityEngine = engine
-            engine
+            ).also {
+                securityEngine = it
+            }
         }
     }
 
-    // For testing purposes
     fun setProtectedAppsRepositoryForTest(repo: ProtectedAppsRepository?) {
-        protectedAppsRepository = repo
+        synchronized(this) {
+            protectedAppsRepository = repo
+        }
     }
 
     fun getProtectedAppsRepository(context: Context): ProtectedAppsRepository {
+        val appContext = context.applicationContext
         return protectedAppsRepository ?: synchronized(this) {
-            val db = WcmpDatabaseProvider.getDatabase(context)
-            val dataSource = DefaultInstalledAppDataSource(context.applicationContext)
-            val repo = DefaultProtectedAppsRepository(
-                appDataSource = dataSource,
-                protectedAppDao = db.protectedAppDao()
-            )
-            protectedAppsRepository = repo
-            repo
+            protectedAppsRepository ?: run {
+                val db = WcmpDatabaseProvider.getDatabase(appContext)
+                val dataSource = DefaultInstalledAppDataSource(appContext)
+                DefaultProtectedAppsRepository(
+                    appDataSource = dataSource,
+                    protectedAppDao = db.protectedAppDao()
+                ).also {
+                    protectedAppsRepository = it
+                }
+            }
         }
     }
 
     fun getSecurityRepository(context: Context): SecurityRepository {
+        val appContext = context.applicationContext
         return securityRepository ?: synchronized(this) {
-            val db = WcmpDatabaseProvider.getDatabase(context)
-            val prefs = WcmpPreferences(context)
-            val repo = DefaultSecurityRepository(
-                securityEventDao = db.securityEventDao(),
-                vaultEvidenceDao = db.vaultEvidenceDao(),
-                protectedAppDao = db.protectedAppDao(),
-                preferences = prefs
-            )
-            securityRepository = repo
-            repo
+            securityRepository ?: run {
+                val db = WcmpDatabaseProvider.getDatabase(appContext)
+                val prefs = WcmpPreferences(appContext)
+                DefaultSecurityRepository(
+                    securityEventDao = db.securityEventDao(),
+                    vaultEvidenceDao = db.vaultEvidenceDao(),
+                    protectedAppDao = db.protectedAppDao(),
+                    preferences = prefs
+                ).also {
+                    securityRepository = it
+                }
+            }
         }
     }
 
     fun getCapabilityRepository(context: Context): CapabilityRepository {
+        val appContext = context.applicationContext
         return capabilityRepository ?: synchronized(this) {
-            val appContext = context.applicationContext
-            val runtimePermissionManager = DefaultRuntimePermissionManager(appContext)
-            val specialAccessManager = DefaultSpecialAccessManager(appContext)
-            val capabilityManager = CapabilityManager(runtimePermissionManager, specialAccessManager)
-            val repo = CapabilityRepository(capabilityManager)
-            capabilityRepository = repo
-            repo
+            capabilityRepository ?: run {
+                val runtimePermissionManager = DefaultRuntimePermissionManager(appContext)
+                val specialAccessManager = DefaultSpecialAccessManager(appContext)
+                val capabilityManager = CapabilityManager(
+                    runtimePermissionManager,
+                    specialAccessManager
+                )
+                CapabilityRepository(capabilityManager).also {
+                    capabilityRepository = it
+                }
+            }
         }
     }
 }

@@ -217,13 +217,19 @@ fun ProtectionScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     QuickAccessCard(
                         modifier = Modifier.weight(1f),
                         title = "Protected Apps",
                         icon = WcmpIcons.Apps,
                         onClick = onNavigateToProtectedApps
+                    )
+                    QuickAccessCard(
+                        modifier = Modifier.weight(1f),
+                        title = "Rules",
+                        icon = WcmpIcons.Eye,
+                        onClick = onNavigateToRules
                     )
                     QuickAccessCard(
                         modifier = Modifier.weight(1f),
