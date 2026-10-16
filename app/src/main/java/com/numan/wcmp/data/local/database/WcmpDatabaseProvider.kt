@@ -46,6 +46,17 @@ object WcmpDatabaseProvider {
         }
     }
 
+    val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_security_events_timestamp` ON `security_events` (`timestamp`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_security_events_sessionId` ON `security_events` (`sessionId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_security_events_packageName` ON `security_events` (`packageName`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_vault_evidence_timestamp` ON `vault_evidence` (`timestamp`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_vault_evidence_sessionId` ON `vault_evidence` (`sessionId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_vault_evidence_relatedEventId` ON `vault_evidence` (`relatedEventId`)")
+        }
+    }
+
     fun getDatabase(context: Context): WcmpDatabase {
         return INSTANCE ?: synchronized(this) {
             val instance = Room.databaseBuilder(
@@ -53,9 +64,8 @@ object WcmpDatabaseProvider {
                 WcmpDatabase::class.java,
                 "wcmp_database"
             )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
-            // No fallbackToDestructiveMigration() as requested.
-            // Migration paths will be defined in future steps.
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .fallbackToDestructiveMigrationOnDowngrade()
             .build()
             INSTANCE = instance
             instance
