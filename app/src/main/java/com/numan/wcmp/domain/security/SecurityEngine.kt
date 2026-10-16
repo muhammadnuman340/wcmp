@@ -1,16 +1,18 @@
 package com.numan.wcmp.domain.security
 
 import com.numan.wcmp.data.repository.ProtectedAppsRepository
+import com.numan.wcmp.domain.protection.AppLockController
+import com.numan.wcmp.domain.protection.AppLockState
+import com.numan.wcmp.feature.protectedapps.model.ProtectedApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-import com.numan.wcmp.domain.protection.AppLockController
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class SecurityEngine(
     private val foregroundMonitor: ForegroundMonitor,
@@ -23,103 +25,142 @@ class SecurityEngine(
     private val _state = MutableStateFlow(SecurityEngineState.DISABLED)
     val state: StateFlow<SecurityEngineState> = _state.asStateFlow()
 
+    private val transitionMutex = Mutex()
+    private val lifecycleLock = Any()
+
     private var monitorJob: Job? = null
     private var statusJob: Job? = null
+    private var protectedAppsCacheJob: Job? = null
 
-    // Session-based deduplication
+    @Volatile
+    private var cachedProtectedApps: Map<String, ProtectedApp> = emptyMap()
+
+    @Volatile
     private var currentProtectedSessionPackage: String? = null
 
-    fun start() {
-        if (_state.value == SecurityEngineState.RUNNING || _state.value == SecurityEngineState.STARTING) return
+    @Volatile
+    var engineArmedAtTimestamp: Long? = null
+        private set
 
-        _state.update { SecurityEngineState.STARTING }
-        foregroundMonitor.start()
-        
-        statusJob = coroutineScope.launch {
-            foregroundMonitor.status.collect { status ->
-                when (status) {
-                    ForegroundMonitorStatus.RUNNING -> _state.update { SecurityEngineState.RUNNING }
-                    ForegroundMonitorStatus.REQUIRES_ACCESS -> _state.update { SecurityEngineState.WAITING_FOR_ACCESS }
-                    ForegroundMonitorStatus.ERROR -> _state.update { SecurityEngineState.ERROR }
-                    ForegroundMonitorStatus.STOPPED, ForegroundMonitorStatus.NOT_AVAILABLE -> _state.update { SecurityEngineState.DISABLED }
-                    else -> {}
+    fun start() {
+        synchronized(lifecycleLock) {
+            if (monitorJob?.isActive == true && statusJob?.isActive == true) {
+                foregroundMonitor.start()
+                return
+            }
+
+            monitorJob?.cancel()
+            statusJob?.cancel()
+            protectedAppsCacheJob?.cancel()
+
+            _state.update { SecurityEngineState.STARTING }
+            if (engineArmedAtTimestamp == null) {
+                engineArmedAtTimestamp = System.currentTimeMillis()
+            }
+            foregroundMonitor.start()
+
+            protectedAppsCacheJob = coroutineScope.launch {
+                protectedAppsRepository.observeProtectedAppsOnly().collect { list ->
+                    cachedProtectedApps = list.associateBy { it.packageName }
                 }
             }
-        }
 
-        monitorJob = coroutineScope.launch {
-            foregroundMonitor.foregroundApp.collect { app ->
-                handleForegroundTransition(app)
+            statusJob = coroutineScope.launch {
+                foregroundMonitor.status.collect { status ->
+                    when (status) {
+                        ForegroundMonitorStatus.RUNNING -> _state.update {
+                            SecurityEngineState.RUNNING
+                        }
+                        ForegroundMonitorStatus.REQUIRES_ACCESS -> _state.update {
+                            SecurityEngineState.WAITING_FOR_ACCESS
+                        }
+                        ForegroundMonitorStatus.ERROR -> _state.update {
+                            SecurityEngineState.ERROR
+                        }
+                        ForegroundMonitorStatus.STOPPED,
+                        ForegroundMonitorStatus.NOT_AVAILABLE -> {
+                            _state.update { SecurityEngineState.DISABLED }
+                        }
+                        else -> {}
+                    }
+                }
+            }
+
+            monitorJob = coroutineScope.launch {
+                foregroundMonitor.foregroundApp.collect { app ->
+                    transitionMutex.withLock {
+                        handleForegroundTransition(app)
+                    }
+                }
             }
         }
     }
 
     fun stop() {
-        _state.update { SecurityEngineState.DISABLED }
-        foregroundMonitor.stop()
-        monitorJob?.cancel()
-        statusJob?.cancel()
-        currentProtectedSessionPackage = null
+        synchronized(lifecycleLock) {
+            _state.update { SecurityEngineState.DISABLED }
+            engineArmedAtTimestamp = null
+            foregroundMonitor.stop()
+            monitorJob?.cancel()
+            statusJob?.cancel()
+            protectedAppsCacheJob?.cancel()
+            monitorJob = null
+            statusJob = null
+            protectedAppsCacheJob = null
+            currentProtectedSessionPackage = null
+            sessionManager?.endSession(SecuritySessionStatus.CANCELLED)
+        }
     }
 
     private suspend fun handleForegroundTransition(app: ForegroundApp?) {
         if (app == null) {
-            // User went to launcher or unknown
-            val prevSession = currentProtectedSessionPackage
-            currentProtectedSessionPackage = null
-            if (prevSession != null) {
-                appLockController?.onProtectedAppLeft(prevSession)
-                sessionManager?.endSession()
-            }
+            endActiveProtectedSession()
             return
         }
-        
-        // Ignore WCMP itself
+
+        // If WCMP itself is in the foreground, check if AppLockController is actively locking/authenticating.
+        // Do NOT tear down the active protected session while AppLockActivity is prompting for biometrics.
         if (app.packageName == "com.numan.wcmp") {
-            val prevSession = currentProtectedSessionPackage
-            currentProtectedSessionPackage = null
-            if (prevSession != null) {
-                appLockController?.onProtectedAppLeft(prevSession)
-                sessionManager?.endSession()
+            val lockState = appLockController?.state?.value
+            if (lockState == AppLockState.LOCK_REQUIRED || lockState == AppLockState.AUTHENTICATING) {
+                return
             }
+            endActiveProtectedSession()
             return
         }
 
-        // Check if package is protected
-        // We use first() to get the current list. In a highly optimized engine we'd cache this.
-        val protectedApps = protectedAppsRepository.observeProtectedAppsOnly().first()
-        val isProtected = protectedApps.any { it.packageName == app.packageName }
-
-        if (!isProtected) {
-            // Unprotected app
-            val prevSession = currentProtectedSessionPackage
-            currentProtectedSessionPackage = null
-            if (prevSession != null) {
-                appLockController?.onProtectedAppLeft(prevSession)
-                sessionManager?.endSession()
-            }
+        val matchedApp = cachedProtectedApps[app.packageName]
+        if (matchedApp == null) {
+            endActiveProtectedSession()
             return
         }
 
-        // Protected app accessed. Check deduplication
         if (currentProtectedSessionPackage == app.packageName) {
-            // Already the current protected session, ignore duplicate
             return
         }
 
-        // New protected session!
+        // If transitioning directly from Protected App A to Protected App B, close Session A first
+        if (currentProtectedSessionPackage != null && currentProtectedSessionPackage != app.packageName) {
+            endActiveProtectedSession()
+        }
+
         currentProtectedSessionPackage = app.packageName
-        
-        // Populate applicationName if we found it in the repository
-        val matchedApp = protectedApps.find { it.packageName == app.packageName }
-        val enrichedApp = app.copy(applicationName = matchedApp?.name ?: app.applicationName)
-        
+        val enrichedApp = app.copy(applicationName = matchedApp.name)
+
         sessionManager?.startSession(
             trigger = "Protected App Access",
             protectedPackage = app.packageName
         )
-        
         eventProcessor.processProtectedAppAccess(enrichedApp)
         appLockController?.onProtectedAppAccessed(enrichedApp)
+    }
+
+    private fun endActiveProtectedSession() {
+        val prevSession = currentProtectedSessionPackage
+        currentProtectedSessionPackage = null
+        if (prevSession != null) {
+            appLockController?.onProtectedAppLeft(prevSession)
+            sessionManager?.endSession()
+        }
     }
 }

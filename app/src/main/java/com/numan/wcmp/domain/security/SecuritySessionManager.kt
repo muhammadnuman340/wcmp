@@ -3,13 +3,16 @@ package com.numan.wcmp.domain.security
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.util.UUID
 
 class SecuritySessionManager {
-    
     private val _currentSession = MutableStateFlow<SecuritySession?>(null)
     val currentSession: StateFlow<SecuritySession?> = _currentSession.asStateFlow()
-    
+
+    private val _lastCompletedSession = MutableStateFlow<SecuritySession?>(null)
+    val lastCompletedSession: StateFlow<SecuritySession?> = _lastCompletedSession.asStateFlow()
+
     fun startSession(trigger: String, protectedPackage: String? = null): String {
         val sessionId = UUID.randomUUID().toString()
         val session = SecuritySession(
@@ -24,28 +27,28 @@ class SecuritySessionManager {
         _currentSession.value = session
         return sessionId
     }
-    
+
     fun recordEvent() {
-        _currentSession.value?.let { current ->
-            _currentSession.value = current.copy(eventCount = current.eventCount + 1)
+        _currentSession.update { current ->
+            current?.copy(eventCount = current.eventCount + 1)
         }
     }
-    
+
     fun recordEvidence() {
-        _currentSession.value?.let { current ->
-            _currentSession.value = current.copy(evidenceCount = current.evidenceCount + 1)
+        _currentSession.update { current ->
+            current?.copy(evidenceCount = current.evidenceCount + 1)
         }
     }
-    
+
     fun endSession(status: SecuritySessionStatus = SecuritySessionStatus.COMPLETED) {
-        _currentSession.value?.let { current ->
-            _currentSession.value = current.copy(
-                endedAt = System.currentTimeMillis(),
-                status = status
-            )
+        _currentSession.update { current ->
+            if (current != null) {
+                _lastCompletedSession.value = current.copy(
+                    endedAt = System.currentTimeMillis(),
+                    status = status
+                )
+            }
+            null
         }
-        // In a real app, we would persist the completed session to the database here.
-        // For this step, we just clear it or let it remain as the last completed session.
-        _currentSession.value = null
     }
 }

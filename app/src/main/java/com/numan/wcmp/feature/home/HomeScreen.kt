@@ -24,17 +24,17 @@ fun HomeScreen(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val repository = WcmpRepositoryProvider.getSecurityRepository(context)
-    val sessionManager = WcmpRepositoryProvider.getSecuritySessionManager()
-    val currentSession by sessionManager.currentSession.collectAsState()
+    val securityEngine = WcmpRepositoryProvider.getSecurityEngine(context)
+    val engineState by securityEngine.state.collectAsState()
     val allEvidence by repository.observeVaultEvidence().collectAsState(initial = emptyList())
     val allEvents by repository.observeSecurityEvents().collectAsState(initial = emptyList())
 
-    val isProtected = currentSession != null
-    val eventsCount = if (currentSession != null) currentSession?.eventCount ?: 0 else allEvents.size
-    val evidenceCount = if (currentSession != null) currentSession?.evidenceCount ?: 0 else allEvidence.size
+    val isProtected = engineState == com.numan.wcmp.domain.security.SecurityEngineState.RUNNING
+    val eventsCount = allEvents.size
+    val evidenceCount = allEvidence.size
     
-    val activeTime = if (currentSession != null) {
-        val durationMs = System.currentTimeMillis() - currentSession!!.startedAt
+    val activeTime = if (isProtected && securityEngine.engineArmedAtTimestamp != null) {
+        val durationMs = System.currentTimeMillis() - securityEngine.engineArmedAtTimestamp!!
         val minutes = (durationMs / (1000 * 60)) % 60
         val hours = (durationMs / (1000 * 60 * 60))
         String.format("%02dh %02dm", hours, minutes)

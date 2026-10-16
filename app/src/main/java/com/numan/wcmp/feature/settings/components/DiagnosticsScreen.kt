@@ -94,9 +94,9 @@ fun DiagnosticsScreen(
             }
             
             item {
-                val sessionManager = com.numan.wcmp.data.WcmpRepositoryProvider.getSecuritySessionManager()
-                val currentSession by sessionManager.currentSession.collectAsState()
-                val isProtectionActive = currentSession != null
+                val securityEngine = com.numan.wcmp.data.WcmpRepositoryProvider.getSecurityEngine(context)
+                val engineState by securityEngine.state.collectAsState()
+                val isProtectionActive = engineState == com.numan.wcmp.domain.security.SecurityEngineState.RUNNING
                 
                 val accessibilityGranted = capabilities.find { 
                     it.capability == AndroidCapability.ACCESSIBILITY_SERVICE 
