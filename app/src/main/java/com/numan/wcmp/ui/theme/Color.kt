@@ -2,12 +2,18 @@ package com.numan.wcmp.ui.theme
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 // Premium Design System V2 Tokens
-val WcmpBackground = Color(0xFF03060B)
-val WcmpSurface = Color(0xFF09111B)
-val WcmpSurface2 = Color(0xFF0C1723)
+val WcmpBackground = Color(0xFF020B20) // Deep midnight navy matched to user screenshot
+val WcmpSurface = Color(0xFF07122A)
+val WcmpSurface2 = Color(0xFF0B1938)
+val WcmpGridDot = Color(0xFF0C1838)
 val WcmpPrimary = Color(0xFF20BAFF)
 val WcmpSecondary = Color(0xFF0879DF)
 val WcmpCyan = Color(0xFF69DCFF)
@@ -62,5 +68,25 @@ val WcmpLightColorScheme = lightColorScheme(
     onError = Color.White
 )
 
-// Cleaned up V1 colors
-
+// Cyber dot grid modifier matching user spec (#020B20 background with #0C1838 dots)
+fun Modifier.wcmpCyberBackground(
+    backgroundColor: Color = WcmpBackground,
+    dotColor: Color = WcmpGridDot,
+    spacing: Dp = 28.dp,
+    dotRadius: Dp = 1.2.dp
+): Modifier = this.drawBehind {
+    drawRect(backgroundColor)
+    val spacingPx = spacing.toPx()
+    val radiusPx = dotRadius.toPx()
+    val cols = (size.width / spacingPx).toInt() + 1
+    val rows = (size.height / spacingPx).toInt() + 1
+    for (i in 0..cols) {
+        for (j in 0..rows) {
+            drawCircle(
+                color = dotColor,
+                radius = radiusPx,
+                center = Offset(i * spacingPx, j * spacingPx)
+            )
+        }
+    }
+}

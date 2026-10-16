@@ -9,18 +9,21 @@ class EvidencePolicy(
     private val locationEnabledFlow: Flow<Boolean>
 ) {
     suspend fun isCaptureAllowed(request: EvidenceCaptureRequest): Boolean {
-        // Allow manual test, authentication failures, and authentication cancellation to trigger evidence
-        if (request.trigger != EvidenceTrigger.AUTHENTICATION_FAILED && 
-            request.trigger != EvidenceTrigger.AUTHENTICATION_CANCELLED && 
-            request.trigger != EvidenceTrigger.MANUAL_TEST) {
-            return false
-        }
+        return when (request.trigger) {
+            EvidenceTrigger.MANUAL_TEST,
+            EvidenceTrigger.MANUAL_CAPTURE -> true
 
-        return when (request.preferredType) {
-            EvidenceType.FRONT_CAMERA_PHOTO -> cameraEnabledFlow.first()
-            EvidenceType.AUDIO_CLIP -> audioEnabledFlow.first()
-            EvidenceType.LOCATION_STAMP -> locationEnabledFlow.first()
-            else -> false // Unhandled or disabled types
+            EvidenceTrigger.AUTHENTICATION_FAILED,
+            EvidenceTrigger.AUTHENTICATION_CANCELLED -> {
+                when (request.preferredType) {
+                    EvidenceType.FRONT_CAMERA_PHOTO -> cameraEnabledFlow.first()
+                    EvidenceType.AUDIO_CLIP -> audioEnabledFlow.first()
+                    EvidenceType.LOCATION_STAMP -> locationEnabledFlow.first()
+                    else -> false
+                }
+            }
+
+            EvidenceTrigger.PROTECTED_APP_ACCESS -> false
         }
     }
 }

@@ -43,9 +43,7 @@ fun HomeScreen(
     }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier = modifier.fillMaxSize()
     ) {
         WcmpTopBar(
             onMenuClick = { /* Menu */ }

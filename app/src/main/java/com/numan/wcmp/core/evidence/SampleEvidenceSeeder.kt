@@ -41,6 +41,9 @@ object SampleEvidenceSeeder {
     }
 
     suspend fun seed(context: Context): Int = withContext(Dispatchers.IO) {
+        if (!com.numan.wcmp.BuildConfig.DEBUG) {
+            return@withContext 0
+        }
         val repository = WcmpRepositoryProvider.getSecurityRepository(context)
         val directoryProvider = AndroidEvidenceDirectoryProvider(context.applicationContext)
         val keyManager = DefaultEvidenceKeyManager()

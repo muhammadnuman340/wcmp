@@ -178,23 +178,25 @@ fun EvidenceSummarySection(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                if (com.numan.wcmp.BuildConfig.DEBUG) {
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                OutlinedButton(
-                    onClick = {
-                        coroutineScope.launch {
-                            val count = SampleEvidenceSeeder.seed(context)
-                            Toast.makeText(context, "Added $count verified evidence records", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "+ Generate Sample Evidence Set",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
-                    )
+                    OutlinedButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                val count = SampleEvidenceSeeder.seed(context)
+                                Toast.makeText(context, "Added $count verified evidence records", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "+ Generate Sample Evidence Set",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                    }
                 }
             }
         }

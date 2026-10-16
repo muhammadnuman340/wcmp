@@ -58,17 +58,17 @@ class WcmpPreferences(private val context: Context) {
         context.dataStore.edit { it[ANIMATIONS] = enabled }
     }
 
-    val cameraEvidenceEnabled: Flow<Boolean> = context.dataStore.data.map { it[CAMERA_EVIDENCE] ?: false }
+    val cameraEvidenceEnabled: Flow<Boolean> = context.dataStore.data.map { it[CAMERA_EVIDENCE] ?: true }
     suspend fun setCameraEvidence(enabled: Boolean) {
         context.dataStore.edit { it[CAMERA_EVIDENCE] = enabled }
     }
 
-    val audioEvidenceEnabled: Flow<Boolean> = context.dataStore.data.map { it[AUDIO_EVIDENCE] ?: false }
+    val audioEvidenceEnabled: Flow<Boolean> = context.dataStore.data.map { it[AUDIO_EVIDENCE] ?: true }
     suspend fun setAudioEvidence(enabled: Boolean) {
         context.dataStore.edit { it[AUDIO_EVIDENCE] = enabled }
     }
 
-    val locationEvidenceEnabled: Flow<Boolean> = context.dataStore.data.map { it[LOCATION_EVIDENCE] ?: false }
+    val locationEvidenceEnabled: Flow<Boolean> = context.dataStore.data.map { it[LOCATION_EVIDENCE] ?: true }
     suspend fun setLocationEvidence(enabled: Boolean) {
         context.dataStore.edit { it[LOCATION_EVIDENCE] = enabled }
     }

@@ -32,6 +32,8 @@ import com.numan.wcmp.feature.settings.SettingsScreen
 import com.numan.wcmp.feature.vault.VaultScreen
 import com.numan.wcmp.ui.theme.WCMPTheme
 
+import com.numan.wcmp.ui.theme.wcmpCyberBackground
+
 @Composable
 fun WcmpApp(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -58,6 +60,10 @@ fun WcmpApp(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .then(
+                        if (darkTheme) Modifier.wcmpCyberBackground()
+                        else Modifier
+                    )
             ) {
                 AnimatedContent(
                     targetState = navigator.currentDestination,

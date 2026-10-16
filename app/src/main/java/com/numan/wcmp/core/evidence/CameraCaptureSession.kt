@@ -26,17 +26,23 @@ object CameraCaptureSession {
         }
     }
 
-    fun complete(record: EvidenceRecord?) {
+    fun complete(record: EvidenceRecord?): Boolean {
         val cont = activeContinuation
         activeContinuation = null
         currentRequestTrigger = null
         currentRequestEventId = null
-        if (cont is kotlinx.coroutines.CancellableContinuation) {
+        return if (cont is kotlinx.coroutines.CancellableContinuation) {
             if (cont.isActive) {
                 cont.resume(record, null)
+                true
+            } else {
+                false
             }
+        } else if (cont != null) {
+            cont.resume(record)
+            true
         } else {
-            cont?.resume(record)
+            false
         }
     }
 }
