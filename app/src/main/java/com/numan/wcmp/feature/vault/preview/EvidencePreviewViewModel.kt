@@ -78,6 +78,16 @@ class EvidencePreviewViewModel(
         currentEvidenceId = evidence.id
         _uiState.value = EvidencePreviewState.Preparing
 
+        if (evidence.type == VaultEvidenceType.LOCATION) {
+            // Location is plaintext Room metadata, don't try to decrypt a physical file
+            _uiState.value = EvidencePreviewState.LocationReady(
+                latitude = evidence.latitude ?: 0.0,
+                longitude = evidence.longitude ?: 0.0,
+                accuracy = evidence.accuracyMeters
+            )
+            return
+        }
+
         // Security State Handling Before Preview
         when (evidenceUiModel.health) {
             EvidenceHealth.INTEGRITY_ERROR -> {
@@ -105,18 +115,8 @@ class EvidencePreviewViewModel(
                 return
             }
             EvidenceHealth.HEALTHY -> {
-                // Proceed to controlled decryption (or plaintext mapping for location)
+                // Proceed to controlled decryption
             }
-        }
-
-        if (evidence.type == VaultEvidenceType.LOCATION) {
-            // Location is plaintext Room metadata, don't try to decrypt a physical file
-            _uiState.value = EvidencePreviewState.LocationReady(
-                latitude = evidence.latitude ?: 0.0,
-                longitude = evidence.longitude ?: 0.0,
-                accuracy = evidence.accuracyMeters
-            )
-            return
         }
 
         _uiState.value = EvidencePreviewState.Decrypting

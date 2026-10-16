@@ -1,4 +1,4 @@
-﻿package com.numan.wcmp.domain.evidence.health
+package com.numan.wcmp.domain.evidence.health
 
 import com.numan.wcmp.core.security.evidence.EvidenceCrypto
 import com.numan.wcmp.core.security.evidence.EvidenceKeyManager

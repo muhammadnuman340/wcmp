@@ -1,4 +1,4 @@
-﻿package com.numan.wcmp.domain.evidence.health
+package com.numan.wcmp.domain.evidence.health
 
 import android.content.Context
 import java.io.File

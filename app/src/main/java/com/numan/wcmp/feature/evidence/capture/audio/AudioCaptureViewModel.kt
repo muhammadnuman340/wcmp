@@ -47,14 +47,9 @@ class AudioCaptureViewModel : ViewModel() {
         _uiState.value = AudioCaptureUiState.Initializing
 
         try {
-            val evidenceDir = File(context.filesDir, "evidence")
-            if (!evidenceDir.exists()) {
-                evidenceDir.mkdirs()
-            }
-
             val id = UUID.randomUUID().toString()
             val timestamp = System.currentTimeMillis()
-            val file = File(evidenceDir, "audio_${timestamp}_$id.m4a")
+            val file = File(context.cacheDir, "temp_audio_${timestamp}_$id.m4a")
 
             val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 MediaRecorder(context)
@@ -127,10 +122,12 @@ class AudioCaptureViewModel : ViewModel() {
                 _uiState.value = AudioCaptureUiState.Success(id)
                 AudioCaptureSession.complete(record)
             } else {
+                outputFile?.delete()
                 _uiState.value = AudioCaptureUiState.Failed("Recording file is empty or invalid")
                 AudioCaptureSession.complete(null)
             }
         } catch (e: Exception) {
+            outputFile?.delete()
             releaseRecorder()
             _uiState.value = AudioCaptureUiState.Failed(e.message ?: "Failed to save recording")
             AudioCaptureSession.complete(null)

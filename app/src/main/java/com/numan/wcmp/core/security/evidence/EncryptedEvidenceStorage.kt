@@ -7,6 +7,8 @@ import com.numan.wcmp.domain.evidence.EvidenceType
 import com.numan.wcmp.feature.vault.model.VaultCategory
 import com.numan.wcmp.feature.vault.model.VaultEvidence
 import com.numan.wcmp.feature.vault.model.VaultEvidenceType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -24,54 +26,56 @@ class EncryptedEvidenceStorage(
         title: String,
         category: String,
         sessionId: String?
-    ) {
-        var finalLocalUri = record.localUri
+    ) = withContext(Dispatchers.IO) {
         var isEncrypted = false
         var encryptionVersion: Int? = null
+        var actualSizeBytes = record.fileSizeInBytes
 
-        // Encrypt file if it's a valid local URI starting with file://
         if (record.localUri.startsWith("file://")) {
             val path = record.localUri.removePrefix("file://")
-                val plaintextFile = File(path)
-                if (plaintextFile.exists()) {
-                    val encryptedFileName = "evidence_${record.id}.enc"
-                    val encryptedFile = File(filesDir, "evidence/$encryptedFileName")
-                    
-                    encryptedFile.parentFile?.mkdirs()
+            val plaintextFile = File(path)
+            if (plaintextFile.exists()) {
+                val encryptedFileName = "evidence_${record.id}.enc"
+                val encryptedFile = File(filesDir, "evidence/$encryptedFileName")
 
-                    try {
-                        EvidenceCrypto.encryptFile(
-                            keyManager = keyManager,
-                            plaintextFile = plaintextFile,
-                            encryptedFile = encryptedFile,
-                            version = EvidenceEncryptionVersion.V1
-                        )
-                        
-                        finalLocalUri = "file://${encryptedFile.absolutePath}"
-                        isEncrypted = true
-                        encryptionVersion = EvidenceEncryptionVersion.V1
-                    } catch (e: Exception) {
-                        // If encryption fails, clean up the plaintext file so it isn't left exposed
-                        if (plaintextFile.exists()) {
-                            plaintextFile.delete()
-                        }
-                        if (encryptedFile.exists()) {
-                            encryptedFile.delete()
-                        }
-                        throw EvidenceEncryptionException("Failed to encrypt evidence file", e)
-                    }
+                encryptedFile.parentFile?.mkdirs()
+
+                try {
+                    EvidenceCrypto.encryptFile(
+                        keyManager = keyManager,
+                        plaintextFile = plaintextFile,
+                        encryptedFile = encryptedFile,
+                        version = EvidenceEncryptionVersion.V1
+                    )
+
+                    isEncrypted = true
+                    encryptionVersion = EvidenceEncryptionVersion.V1
+                    actualSizeBytes = encryptedFile.length()
+                } catch (e: Exception) {
+                    EvidenceCrypto.secureDelete(plaintextFile)
+                    EvidenceCrypto.secureDelete(encryptedFile)
+                    throw EvidenceEncryptionException("Failed to encrypt evidence file", e)
                 }
+            }
         } else if (record.type == EvidenceType.LOCATION_STAMP) {
-            // Location is pure metadata, so we consider it "encrypted" implicitly by the Vault schema
             isEncrypted = true
             encryptionVersion = EvidenceEncryptionVersion.V1
         }
 
-        val vaultType = when (record.type) {
-            EvidenceType.FRONT_CAMERA_PHOTO -> VaultEvidenceType.PHOTO
-            EvidenceType.AUDIO_CLIP -> VaultEvidenceType.AUDIO
-            EvidenceType.LOCATION_STAMP -> VaultEvidenceType.LOCATION
-            EvidenceType.AUDIT_LOG_SNAPSHOT -> VaultEvidenceType.EVENT
+        val (vaultType, vaultCategory) = when (record.type) {
+            EvidenceType.FRONT_CAMERA_PHOTO -> VaultEvidenceType.PHOTO to VaultCategory.PHOTOS
+            EvidenceType.AUDIO_CLIP -> VaultEvidenceType.AUDIO to VaultCategory.AUDIO
+            EvidenceType.LOCATION_STAMP -> VaultEvidenceType.LOCATION to VaultCategory.OTHER
+            EvidenceType.AUDIT_LOG_SNAPSHOT -> VaultEvidenceType.EVENT to VaultCategory.EVENTS
+        }
+
+        val formattedDate = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
+            .format(Date(record.capturedAtTimestamp))
+
+        val sizeLabel = if (record.type == EvidenceType.LOCATION_STAMP) {
+            "1 KB"
+        } else {
+            "${(actualSizeBytes / 1024L).coerceAtLeast(1L)} KB"
         }
 
         val vaultEvidence = VaultEvidence(
@@ -79,9 +83,9 @@ class EncryptedEvidenceStorage(
             title = title,
             type = vaultType,
             relatedEvent = relatedEventId ?: category,
-            timestamp = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(record.capturedAtTimestamp)),
-            size = "${record.fileSizeInBytes / 1024} KB",
-            category = VaultCategory.OTHER,
+            timestamp = formattedDate,
+            size = sizeLabel,
+            category = vaultCategory,
             latitude = record.latitude,
             longitude = record.longitude,
             accuracyMeters = record.accuracyMeters,
@@ -90,17 +94,15 @@ class EncryptedEvidenceStorage(
             encryptionVersion = encryptionVersion,
             sessionId = sessionId
         )
-        
+
         securityRepository.insertVaultEvidence(vaultEvidence)
     }
 
-    override suspend fun deleteEvidenceRecord(id: String) {
-        // Retrieve the record to know the file path
-        // For simplicity, we just delete the standard format file if it exists
+    override suspend fun deleteEvidenceRecord(id: String) = withContext(Dispatchers.IO) {
         val encryptedFileName = "evidence_$id.enc"
         val encryptedFile = File(filesDir, "evidence/$encryptedFileName")
         if (encryptedFile.exists()) {
-            encryptedFile.delete()
+            EvidenceCrypto.secureDelete(encryptedFile)
         }
         securityRepository.deleteVaultEvidence(id)
     }

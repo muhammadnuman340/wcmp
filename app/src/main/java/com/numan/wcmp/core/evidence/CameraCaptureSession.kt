@@ -1,44 +1,61 @@
 package com.numan.wcmp.core.evidence
 
 import com.numan.wcmp.domain.evidence.EvidenceRecord
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 
 object CameraCaptureSession {
-    private var activeContinuation: Continuation<EvidenceRecord?>? = null
+    private val lock = Any()
+    private var activeContinuation: CancellableContinuation<EvidenceRecord?>? = null
+
+    @Volatile
     var currentRequestTrigger: String? = null
         private set
+
+    @Volatile
     var currentRequestEventId: String? = null
         private set
 
     fun prepareSession(trigger: String, relatedEventId: String?) {
-        currentRequestTrigger = trigger
-        currentRequestEventId = relatedEventId
-    }
-
-    suspend fun awaitResult(): EvidenceRecord? = suspendCancellableCoroutine { cont ->
-        activeContinuation = cont
-        cont.invokeOnCancellation {
-            activeContinuation = null
-            currentRequestTrigger = null
-            currentRequestEventId = null
+        synchronized(lock) {
+            currentRequestTrigger = trigger
+            currentRequestEventId = relatedEventId
         }
     }
 
-    fun complete(record: EvidenceRecord?): Boolean {
-        val cont = activeContinuation
-        activeContinuation = null
-        currentRequestTrigger = null
-        currentRequestEventId = null
-        return if (cont is kotlinx.coroutines.CancellableContinuation) {
-            if (cont.isActive) {
-                cont.resume(record, null)
-                true
-            } else {
-                false
+    suspend fun awaitResult(): EvidenceRecord? =
+        suspendCancellableCoroutine { cont ->
+            synchronized(lock) {
+                // Cancel any stale continuation so it never leaks
+                activeContinuation?.cancel()
+                activeContinuation = cont
             }
-        } else if (cont != null) {
+
+            cont.invokeOnCancellation {
+                synchronized(lock) {
+                    if (activeContinuation === cont) {
+                        activeContinuation = null
+                        currentRequestTrigger = null
+                        currentRequestEventId = null
+                    }
+                }
+            }
+        }
+
+    /**
+     * Completes the active session and returns true if a waiting caller received the record.
+     */
+    fun complete(record: EvidenceRecord?): Boolean {
+        val cont = synchronized(lock) {
+            val current = activeContinuation
+            activeContinuation = null
+            currentRequestTrigger = null
+            currentRequestEventId = null
+            current
+        }
+
+        return if (cont != null && cont.isActive) {
             cont.resume(record)
             true
         } else {
